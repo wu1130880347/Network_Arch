@@ -1,37 +1,35 @@
 #include "CNetManagement.h"
-CNetManagement::CNetManagement()
-{
-
-}
 CNetManagement::~CNetManagement()
 {
 
 }
-void CNetManagement::Config(void)
+CNetManagement::CNetManagement(NetParaType_t * para,CSuperAppInterface *g_app,CSuperNetInterface *g_net)
 {
+    g_NetDrv = g_net;
+    g_NetApp = g_app;
+    Config(para);
 }
-void CNetManagement::network_RxTxd(u8 SocketNum,uint8_t* dat,uint16_t *len,BOOL *ComSndRequest,RxTxD_t rtx_f)
-{
 
+void CNetManagement::Config(NetParaType_t * para)
+{
+    g_NetApp->Init(this,(void *)para);//初始化话协议解析必要资源
+    g_NetDrv->Init((void *)para);//舒适化连接驱动必要资源
 }
 
-BOOL CNetManagement::ReceiveCheck(RECEIVE_FRAME *frame)
-{
-    return FALSE;
-}
 void CNetManagement::ComSend(void)
 {
-
+    g_NetDrv->SendData(g_NetApp->Ret_SendBuf());
 }
-void CNetManagement::TimerEvent(u32 ulTimeNum)
+
+void CNetManagement::Agreement(void)
 {
-    switch (ulTimeNum)
+    if(g_NetDrv->ReceData(g_NetApp->Ret_ReceBuf()) == NET_OK)
     {
-    case 1:
-    {
-        break;
+        g_NetApp->Agreement();
     }
-    default:
-        break;
-    }
+}
+
+void CNetManagement::TimerEvent(uint32_t ulTimeNum)
+{
+    return ;
 }

@@ -1,7 +1,7 @@
 #ifndef __DBG_TOOLS_H__
 #define __DBG_TOOLS_H__
 
-#define DBGUART 1
+#define DBGUART 0
 
 #define DBG_RED 	"\033[31m""%s""%s""\033[0m"
 #define DBG_GRE 	"\033[32m""%s""%s""\033[0m"
