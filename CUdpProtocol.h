@@ -1,6 +1,7 @@
 #ifndef __CUDPPROTOCOL_H__
 #define __CUDPPROTOCOL_H__
 #include "CSuperAppInterface.h"
+//#include <map>
 
 class CUdpProtocol : public CSuperAppInterface
 {
@@ -14,9 +15,12 @@ private:
     CNetManagement *mp_this;
     NetPackageStruct_t m_dat_package;
 public:
+    CUdpProtocol();
+    ~CUdpProtocol();
     RECEIVE_FRAME m_ReceiveFrame; //接收数据缓冲
     SEND_FRAME m_SendFrame;       //发送数据缓冲
     uint8_t m_Request;
+    static CUdpProtocol* get_this(void* t_target); //获取本类指针
     virtual void Init(CNetManagement *pthis,void *para);
     virtual void ComSend(void);
     virtual NetPackageStruct_t* Ret_ReceBuf(void);

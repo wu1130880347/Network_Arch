@@ -67,6 +67,11 @@ typedef struct
     NetConfig_t t_para;    
 }NetParaType_t;
 //网络中心数据结构
+typedef struct
+{
+    NetType_t t_net;
+}NetTarget_t;
+//网络主动发送到达使用协议
 
 typedef struct
 {

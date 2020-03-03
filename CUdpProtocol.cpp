@@ -1,14 +1,31 @@
 #include "CUdpProtocol.h"
 #include "CNetManagement.h"
 #include "driver.h"
+#include <map>
+static std::map<void*,CUdpProtocol*> m_udpmap;
+CUdpProtocol::CUdpProtocol()
+{
+
+}
+CUdpProtocol::~CUdpProtocol()
+{
+
+}
+CUdpProtocol *CUdpProtocol::get_this(void* t_target)
+{
+    static CUdpProtocol * p_temp;
+    p_temp = m_udpmap[t_target];
+    return p_temp;
+}
 
 void CUdpProtocol::Init(CNetManagement *pthis,void *para)
 {
     mp_this = pthis;
     m_dat_package.p_sendFrame= &m_SendFrame;
     m_dat_package.p_receFrame = &m_ReceiveFrame;
+    m_udpmap[para] = this;//将其类加入图内
 }
-void CUdpProtocol::ComSend(void) 
+void CUdpProtocol::ComSend(void)
 {
     mp_this->ComSend();
 }
