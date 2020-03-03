@@ -51,7 +51,9 @@ typedef enum
 typedef struct
 {
     uint16_t rx_max;
+    uint8_t *rx_buf;
     uint16_t tx_max;
+    uint8_t *tx_buf;
 }Buffer_rtd_t;
 //ÍøÂçÅäÖÃ²ÎÊı±í
 typedef struct

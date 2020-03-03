@@ -1,10 +1,33 @@
 #include "CNetManagement.h"
+
+//debug info output
+#if DBGUART
+extern "C"
+{
+#define DBG_USE 1
+
+#if DBG_USE
+    //是否打开该文件内的调试LOG
+    static const char EN_LOG = CYAN;
+    //LOG输出文件标记
+    static const char TAG[] = "CNetM: ";
+#else
+#ifdef DBG_Printf
+#undef DBG_Printf
+#define DBG_Printf(...)
+#else
+#endif
+#endif
+}
+#endif
+
 CNetManagement::~CNetManagement()
 {
 
 }
 CNetManagement::CNetManagement(NetParaType_t * para,CSuperAppInterface *g_app,CSuperNetInterface *g_net)
 {
+    Dprintf(EN_LOG,TAG,"config addr = 0x%08x\r\n",(void *)para);
     g_NetDrv = g_net;
     g_NetApp = g_app;
     Config(para);

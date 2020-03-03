@@ -1,5 +1,5 @@
 #include <map>
-#include "CUdpProtocol.h"
+#include "CUartProtocol.h"
 #include "CNetManagement.h"
 #include "driver.h"
 
@@ -14,7 +14,7 @@ extern "C"
     //是否打开该文件内的调试LOG
     static const char EN_LOG = GREEN;
     //LOG输出文件标记
-    static const char TAG[] = "UpdPro: ";
+    static const char TAG[] = "UartPro: ";
 #else
 #ifdef DBG_Printf
 #undef DBG_Printf
@@ -26,86 +26,71 @@ extern "C"
 
 #endif
 
-static std::map<void*,CUdpProtocol*> m_udpmap;
-CUdpProtocol::CUdpProtocol()
+static std::map<void*,CUartProtocol*> m_udpmap;
+CUartProtocol::CUartProtocol()
+{
+    m_SendRandomNum = 0;    //主动发送时的随机数
+    m_ReceiveRandomNum = 0; //接收到的随机数
+    m_CommandNum = 0;       //主动发送时的命令流水号
+    m_CommandNumSave = 0;   //保存主动发送的命令流水号
+    rx_buf_max = 0;
+    tx_buf_max = 0;
+    mp_this = nullptr;
+    m_dat_package.p_sendFrame= nullptr;
+    m_dat_package.p_receFrame = nullptr;
+}
+CUartProtocol::~CUartProtocol()
 {
 
 }
-CUdpProtocol::~CUdpProtocol()
+CUartProtocol *CUartProtocol::get_this(void* t_target)
 {
-
-}
-CUdpProtocol *CUdpProtocol::get_this(void* t_target)
-{
-    static CUdpProtocol * p_temp;
+    Dprintf(EN_LOG,TAG,"Cnet get_this = 0x%08x\r\n",t_target);
+    static CUartProtocol * p_temp;
     p_temp = m_udpmap[t_target];
     return p_temp;
 }
 
-void CUdpProtocol::Init(CNetManagement *pthis,void *para)
+void CUartProtocol::Init(CNetManagement *pthis,void *para)
 {
+    NetParaType_t *temp = (NetParaType_t*)para;
+    Dprintf(EN_LOG,TAG,"Cnet addr = 0x%08x\r\n",(void *)pthis);
+    Dprintf(EN_LOG,TAG,"txf_max = %d rxf_max = %d\r\n",temp->t_rdt_num.tx_max,temp->t_rdt_num.rx_max);
+
+    m_SendFrame.Data = temp->t_rdt_num.tx_buf;//初始化基本数据buffer
+    m_ReceiveFrame.Data = temp->t_rdt_num.rx_buf;
+    rx_buf_max = temp->t_rdt_num.tx_max;
+    tx_buf_max = temp->t_rdt_num.rx_max;
     mp_this = pthis;
     m_dat_package.p_sendFrame= &m_SendFrame;
     m_dat_package.p_receFrame = &m_ReceiveFrame;
     m_udpmap[para] = this;//将其类加入图内
 }
-void CUdpProtocol::ComSend(void)
+void CUartProtocol::ComSend(void)
 {
     mp_this->ComSend();
 }
-NetPackageStruct_t *CUdpProtocol::Ret_ReceBuf(void)
+NetPackageStruct_t *CUartProtocol::Ret_ReceBuf(void)
 {
     return &m_dat_package;
 }
-NetPackageStruct_t *CUdpProtocol::Ret_SendBuf(void)
+NetPackageStruct_t *CUartProtocol::Ret_SendBuf(void)
 {
     return &m_dat_package;
 }
-BOOL CUdpProtocol::ReceiveCheck(RECEIVE_FRAME *frame)
+BOOL CUartProtocol::ReceiveCheck(RECEIVE_FRAME *frame)
 {
-    u8 temp_buff[4] = {0xab, 0x12, 0xcd, 0x34};
-    u8 temp_HMAC[8];
-
     //请求判定
     if (m_Request == 0)
         return FALSE;
-    //复制数据
-    frame->Len = m_ReceiveFrame.Len;
-    memcpy(frame->Data, m_ReceiveFrame.Data, m_ReceiveFrame.Len);
-    m_Request = 0;
-
-    //帧头判定
-    if (memcmp(frame->Data, temp_buff, 4))
-        return FALSE;
-    //长度判定
-    if (*(u16 *)(frame->Data + 4) != (frame->Len - 6))
-    { //粘包处理(只留第一个包)
-        frame->Len = *(u16 *)(frame->Data + 4) + 6;
-    }
-    //长度判定
-    if ((frame->Len == 0) || (frame->Len > rx_buf_max))
-        return FALSE;
-    //DMAC判定
-    if (memcmp(frame->Data + 6, 0x00000000ul, 8))
-        return FALSE;
-    //保存接收随机数
-    m_ReceiveRandomNum = *(u16 *)(frame->Data + 14);
-    //HMAC判定
-    g_CTool.HMAC((*(u16 *)(frame->Data + 4)) - 6, frame->Data + 4, 8, temp_HMAC);
-    if (memcmp(frame->Data + (*(u16 *)(frame->Data + 4)) - 2, temp_HMAC, 8))
-        return FALSE;
-
     return TRUE;
 }
 
-void CUdpProtocol::Agreement(void)
+void CUartProtocol::Agreement(void)
 {
     if (ReceiveCheck(&m_ReceiveFrame))
-    {
-
         return;
-    }
-        
+
     switch (*(u16 *)(m_ReceiveFrame.Data + 20))
     {
     case 0x0001: //心跳回复
@@ -204,4 +189,52 @@ void CUdpProtocol::Agreement(void)
     default:
         break;
     }
+}
+//发送数据(入口参数只传数据域)
+//mode 0:回复发送，1:主动发送 心跳(命令流水号固定0，上层已赋值)，2:主动发送其他指令(命令流水号在此处赋值)
+void CUartProtocol::SendFrame(u16 len, u8 *pData, u8 mode)
+{
+	m_SendFrame.Len = len + 18 + 6;
+	if (m_SendFrame.Len > tx_buf_max)
+		return;
+	//帧头
+	m_SendFrame.Data[0] = 0x49;
+	m_SendFrame.Data[1] = 0x8a;
+	m_SendFrame.Data[2] = 0x5e;
+	m_SendFrame.Data[3] = 0xb4;
+	//帧长度(D-MAC(8)、随机数(2)、数据域、MAC(8))
+	*(u16*)(m_SendFrame.Data+4) = len + 18;
+	//D-MAC
+    static uint8_t temp_dmac[8] = {0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff};
+	memcpy(m_SendFrame.Data+6, temp_dmac, 8);
+	//随机数
+	if (mode)//主动发送
+		*(u16*)(m_SendFrame.Data+14) = ++m_SendRandomNum;
+	else	//回复发送
+		*(u16*)(m_SendFrame.Data+14) = m_ReceiveRandomNum;
+	//数据域
+	memcpy(m_SendFrame.Data+16, pData, len);
+	//数据域的命令流水号
+	if (mode == 2)
+	{
+		*(u32*)(m_SendFrame.Data+16) = ++m_CommandNum;
+		m_CommandNumSave = m_CommandNum;
+	}
+    //static uint8_t temp[8] = {0,1,2,3,4,5,6,7};
+    
+    //memcpy(m_SendFrame.Data+len+16, temp, 8);
+	//HMAC(帧长度、D-MAC、随机数、数据域)
+	g_CTool.HMAC(len+12, m_SendFrame.Data+4, 8, m_SendFrame.Data+len+16);
+	ComSend();
+}
+void CUartProtocol::HeartBeatSend(void)
+{
+    u8 temp_buff[8];
+
+    *(u32 *)(temp_buff) = 0;                                     //命令流水号
+    *(u16 *)(temp_buff + 4) = 0x0001;                            //功能码
+    temp_buff[6] = 0x00; //屏蔽GPRS初始化失败
+    temp_buff[7] = 0x00;
+
+    SendFrame(8, temp_buff, 1);
 }
