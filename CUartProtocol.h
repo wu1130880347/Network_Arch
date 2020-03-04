@@ -27,6 +27,7 @@ public:
     virtual BOOL ReceiveCheck(RECEIVE_FRAME *frame);
     virtual void Agreement(void);
     
+    void TestReturnInfo(RECEIVE_FRAME *frame);
     void HeartBeatSend(void);
     void SendFrame(u16 len, u8 *pData, u8 mode);
 };

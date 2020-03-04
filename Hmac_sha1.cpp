@@ -32,7 +32,7 @@
 #include <stdio.h>
 #include "Hmac_sha1.h"
 
-#define MAX_MESSAGE_LENGTH 1024
+#define MAX_MESSAGE_LENGTH 4096
 
 /********************************************/
 /* Test Cases                               */

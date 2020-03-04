@@ -36,7 +36,7 @@ CNetManagement::CNetManagement(NetParaType_t * para,CSuperAppInterface *g_app,CS
 void CNetManagement::Config(NetParaType_t * para)
 {
     g_NetApp->Init(this,(void *)para);//初始化话协议解析必要资源
-    g_NetDrv->Init((void *)para);//舒适化连接驱动必要资源
+    g_NetDrv->Init((void *)(para->t_para.dat));//初始化连接驱动必要资源
 }
 
 void CNetManagement::ComSend(void)

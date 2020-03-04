@@ -81,16 +81,16 @@ NetPackageStruct_t *CUartProtocol::Ret_SendBuf(void)
 BOOL CUartProtocol::ReceiveCheck(RECEIVE_FRAME *frame)
 {
     //请求判定
-    if (m_Request == 0)
-        return FALSE;
+    //if (m_Request == 0)
+    //    return FALSE;
     return TRUE;
 }
 
 void CUartProtocol::Agreement(void)
 {
-    if (ReceiveCheck(&m_ReceiveFrame))
+    if (!ReceiveCheck(&m_ReceiveFrame))
         return;
-
+    TestReturnInfo(&m_ReceiveFrame);
     switch (*(u16 *)(m_ReceiveFrame.Data + 20))
     {
     case 0x0001: //心跳回复
@@ -194,37 +194,39 @@ void CUartProtocol::Agreement(void)
 //mode 0:回复发送，1:主动发送 心跳(命令流水号固定0，上层已赋值)，2:主动发送其他指令(命令流水号在此处赋值)
 void CUartProtocol::SendFrame(u16 len, u8 *pData, u8 mode)
 {
-	m_SendFrame.Len = len + 18 + 6;
-	if (m_SendFrame.Len > tx_buf_max)
-		return;
-	//帧头
-	m_SendFrame.Data[0] = 0x49;
-	m_SendFrame.Data[1] = 0x8a;
-	m_SendFrame.Data[2] = 0x5e;
-	m_SendFrame.Data[3] = 0xb4;
-	//帧长度(D-MAC(8)、随机数(2)、数据域、MAC(8))
-	*(u16*)(m_SendFrame.Data+4) = len + 18;
-	//D-MAC
-    static uint8_t temp_dmac[8] = {0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff};
-	memcpy(m_SendFrame.Data+6, temp_dmac, 8);
-	//随机数
-	if (mode)//主动发送
-		*(u16*)(m_SendFrame.Data+14) = ++m_SendRandomNum;
-	else	//回复发送
-		*(u16*)(m_SendFrame.Data+14) = m_ReceiveRandomNum;
-	//数据域
-	memcpy(m_SendFrame.Data+16, pData, len);
-	//数据域的命令流水号
-	if (mode == 2)
-	{
-		*(u32*)(m_SendFrame.Data+16) = ++m_CommandNum;
-		m_CommandNumSave = m_CommandNum;
-	}
-    //static uint8_t temp[8] = {0,1,2,3,4,5,6,7};
+	//m_SendFrame.Len = len + 18 + 6;
+    m_SendFrame.Len = len;
+    memcpy(m_SendFrame.Data, pData, len);
+	// if (m_SendFrame.Len > tx_buf_max)
+	// 	return;
+	// //帧头
+	// m_SendFrame.Data[0] = 0x49;
+	// m_SendFrame.Data[1] = 0x8a;
+	// m_SendFrame.Data[2] = 0x5e;
+	// m_SendFrame.Data[3] = 0xb4;
+	// //帧长度(D-MAC(8)、随机数(2)、数据域、MAC(8))
+	// *(u16*)(m_SendFrame.Data+4) = len + 18;
+	// //D-MAC
+    // static uint8_t temp_dmac[8] = {0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff};
+	// memcpy(m_SendFrame.Data+6, temp_dmac, 8);
+	// //随机数
+	// if (mode)//主动发送
+	// 	*(u16*)(m_SendFrame.Data+14) = ++m_SendRandomNum;
+	// else	//回复发送
+	// 	*(u16*)(m_SendFrame.Data+14) = m_ReceiveRandomNum;
+	// //数据域
+	// memcpy(m_SendFrame.Data+16, pData, len);
+	// //数据域的命令流水号
+	// if (mode == 2)
+	// {
+	// 	*(u32*)(m_SendFrame.Data+16) = ++m_CommandNum;
+	// 	m_CommandNumSave = m_CommandNum;
+	// }
+    // //static uint8_t temp[8] = {0,1,2,3,4,5,6,7};
     
-    //memcpy(m_SendFrame.Data+len+16, temp, 8);
-	//HMAC(帧长度、D-MAC、随机数、数据域)
-	g_CTool.HMAC(len+12, m_SendFrame.Data+4, 8, m_SendFrame.Data+len+16);
+    // //memcpy(m_SendFrame.Data+len+16, temp, 8);
+	// //HMAC(帧长度、D-MAC、随机数、数据域)
+	// g_CTool.HMAC(len+12, m_SendFrame.Data+4, 8, m_SendFrame.Data+len+16);
 	ComSend();
 }
 void CUartProtocol::HeartBeatSend(void)
@@ -237,4 +239,8 @@ void CUartProtocol::HeartBeatSend(void)
     temp_buff[7] = 0x00;
 
     SendFrame(8, temp_buff, 1);
+}
+void CUartProtocol::TestReturnInfo(RECEIVE_FRAME *frame)
+{
+    SendFrame(frame->Len, frame->Data, 0);
 }

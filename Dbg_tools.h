@@ -21,6 +21,8 @@ extern "C"
         DPrintf(x, t,##__VA_ARGS__); \
     } while (0)
 #else
+#define EN_LOG 0
+#define TAG ""
 #define DBG_Printf(...)
 #endif
 #endif
