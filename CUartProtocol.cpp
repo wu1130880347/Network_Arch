@@ -81,9 +81,20 @@ NetPackageStruct_t *CUartProtocol::Ret_SendBuf(void)
 BOOL CUartProtocol::ReceiveCheck(RECEIVE_FRAME *frame)
 {
     //请求判定
-    //if (m_Request == 0)
-    //    return FALSE;
-    return TRUE;
+    // Dprintf(EN_LOG,TAG, "Agreement Rece data len = %d\r\n", frame->Len);
+    // for (uint16_t i = 0; i < frame->Len; i++)
+    //     Dprintf(EN_LOG,"", "%02x ", frame->Data[i]);
+    // Dprintf(EN_LOG,"", "\r\n");
+    if (frame->Data[4] == g_CTool.CRC8Value((uint8_t *)&frame->Data[5], *(uint16_t *)&(frame->Data[2])))
+    {
+        Dprintf(EN_LOG,TAG, "check rece suc...\r\n");
+        return TRUE;
+    }
+    else
+    {   
+        Dprintf(EN_LOG,TAG, "check rece fal...\r\n");
+        return FALSE;
+    }
 }
 
 void CUartProtocol::Agreement(void)
@@ -91,10 +102,16 @@ void CUartProtocol::Agreement(void)
     if (!ReceiveCheck(&m_ReceiveFrame))
         return;
     TestReturnInfo(&m_ReceiveFrame);
-    switch (*(u16 *)(m_ReceiveFrame.Data + 20))
+    uint8_t *p_tmp = m_ReceiveFrame.Data + 5;
+    u16 ret = p_tmp[0] | (u16)p_tmp[1] << 8;
+    switch (ret)
     {
     case 0x0001: //心跳回复
         //HeartBeatReply(m_ReceiveFrame.Data + 16);
+        break;
+    case 0x0a00: //下发升级文件信息回复
+    case 0x0a01: //下发升级文件数据回复
+        Transfer_FileData(p_tmp + 2);
         break;
     // case 0x0002: //注册回复
     //     RegisterReply(m_ReceiveFrame.Data + 16);
@@ -195,17 +212,18 @@ void CUartProtocol::Agreement(void)
 void CUartProtocol::SendFrame(u16 len, u8 *pData, u8 mode)
 {
 	//m_SendFrame.Len = len + 18 + 6;
-    m_SendFrame.Len = len;
-    memcpy(m_SendFrame.Data, pData, len);
+    m_SendFrame.Len = len + 5;
+    memcpy(m_SendFrame.Data + 5, pData, len);
 	// if (m_SendFrame.Len > tx_buf_max)
 	// 	return;
 	// //帧头
-	// m_SendFrame.Data[0] = 0x49;
-	// m_SendFrame.Data[1] = 0x8a;
+	m_SendFrame.Data[0] = 0x5a;
+	m_SendFrame.Data[1] = 0xa5;
 	// m_SendFrame.Data[2] = 0x5e;
 	// m_SendFrame.Data[3] = 0xb4;
 	// //帧长度(D-MAC(8)、随机数(2)、数据域、MAC(8))
-	// *(u16*)(m_SendFrame.Data+4) = len + 18;
+	 *(u16*)(m_SendFrame.Data+2) = len;
+     *(u8*)(m_SendFrame.Data+4) = g_CTool.CRC8Value(m_SendFrame.Data + 5,len);
 	// //D-MAC
     // static uint8_t temp_dmac[8] = {0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff};
 	// memcpy(m_SendFrame.Data+6, temp_dmac, 8);
@@ -227,7 +245,8 @@ void CUartProtocol::SendFrame(u16 len, u8 *pData, u8 mode)
     // //memcpy(m_SendFrame.Data+len+16, temp, 8);
 	// //HMAC(帧长度、D-MAC、随机数、数据域)
 	// g_CTool.HMAC(len+12, m_SendFrame.Data+4, 8, m_SendFrame.Data+len+16);
-	ComSend();
+
+     ComSend();
 }
 void CUartProtocol::HeartBeatSend(void)
 {
@@ -242,5 +261,13 @@ void CUartProtocol::HeartBeatSend(void)
 }
 void CUartProtocol::TestReturnInfo(RECEIVE_FRAME *frame)
 {
-    SendFrame(frame->Len, frame->Data, 0);
+    //SendFrame(frame->Len, frame->Data, 0);
+}
+void CUartProtocol::Transfer_FileData(u8 *pData)
+{
+    uint8_t temp_dat[3];
+    *(uint16_t *)temp_dat = 0x0a01;
+    temp_dat[2] = 0;
+    SendFrame(3, temp_dat, 1);
+    Dprintf(EN_LOG,TAG, "rece pos = %d\r\n",*(uint32_t *)pData);
 }

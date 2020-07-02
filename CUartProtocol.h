@@ -30,6 +30,7 @@ public:
     void TestReturnInfo(RECEIVE_FRAME *frame);
     void HeartBeatSend(void);
     void SendFrame(u16 len, u8 *pData, u8 mode);
+    void Transfer_FileData(u8 *pData);
 };
 
 #endif

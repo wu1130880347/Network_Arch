@@ -1,10 +1,12 @@
 #include "IUarts.h"
-
+#include "FreeRTOS.h"					//FreeRTOS使用
+#include "task.h"
+#include "semphr.h"
 //debug info output
 #if DBGUART
 extern "C"
 {
-#define DBG_USE 1
+#define DBG_USE 0
 
 #if DBG_USE
     //是否打开该文件内的调试LOG
@@ -12,11 +14,9 @@ extern "C"
     //LOG输出文件标记
     static const char TAG[] = "UartDrv: ";
 #else
-#ifdef DBG_Printf
-#undef DBG_Printf
-#define DBG_Printf(...)
-#else
-#endif
+#define EN_LOG 0
+#define TAG ""
+#define Dprintf(...)
 #endif
 }
 
@@ -149,6 +149,7 @@ extern "C"
 {
     void USART2_IRQHandler(void)
     {
+        BaseType_t xHigherPriorityTaskWoken;
         while (1)
         {
             if (USART_GetITStatus(USART2, USART_IT_RXNE)) //接收一字节中断
@@ -163,6 +164,9 @@ extern "C"
                 USART_ReceiveData(USART2); //清除IDLE空闲标志位
                 USART_ClearFlag(USART2, USART_FLAG_IDLE);
                 U2_ReceFinsh = 0;
+                extern SemaphoreHandle_t BinarySemaphore_rxd;	//二值信号量句柄
+                xSemaphoreGiveFromISR(BinarySemaphore_rxd, &xHigherPriorityTaskWoken); //释放二值信号量
+                portYIELD_FROM_ISR(xHigherPriorityTaskWoken);                      //如果需要的话进行一次任务切换
             }
             else if (USART_GetITStatus(USART2, USART_IT_TC)) //发送中断
             {
